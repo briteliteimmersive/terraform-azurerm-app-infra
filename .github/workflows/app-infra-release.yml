@@ -1,0 +1,14 @@
+name: app-infra
+
+on:
+ push:
+    branches:
+      - 'main'
+
+jobs:
+
+  module-release:
+    uses: briteliteimmersive/devops-automation-enablers/.github/workflows/tf-module-release.yml@main
+    with:
+      tf-module-name: '.'
+    secrets: inherit
