@@ -8,6 +8,13 @@ variable "mssql_server_configs" {
       public_ip_ranges = []
       subnet_ids       = []
     })
+    firewall_rules = optional(list(object(
+      {
+        name             = string
+        start_ip_address = string
+        end_ip_address   = string
+      }
+    )), [])
     diagnostic_settings = optional(object(
       {
         log_analytics_workspace_name = optional(string)
@@ -55,9 +62,10 @@ variable "mssql_server_configs" {
     tags = optional(map(string), {})
     servers = list(object(
       {
-        name                = string
-        resource_group_name = optional(string)
-        version             = optional(string, "12.0")
+        name                       = string
+        resource_group_name        = optional(string)
+        version                    = optional(string, "12.0")
+        primary_user_identity_name = optional(string)
         azuread_administrator = optional(object(
           {
             login_username              = string
@@ -105,9 +113,39 @@ variable "mssql_server_configs" {
               yearly_retention  = "P1Y"
               week_of_year      = 26
             })
-            threat_detection_policy = optional(string)
-            zone_redundant          = optional(bool)
-            min_capacity            = optional(number)
+            threat_detection_policy = optional(object(
+              {
+                state                      = string
+                disabled_alerts            = string
+                email_account_admins       = string
+                email_addresses            = string
+                retention_days             = number
+                storage_account_access_key = string
+                storage_endpoint           = string
+              }
+            ))
+            zone_redundant = optional(bool)
+            min_capacity   = optional(number)
+          }
+        )))
+        elastic_pools = optional(list(object(
+          {
+            name                           = string
+            license_type                   = optional(string)
+            max_size_gb                    = optional(number)
+            max_size_bytes                 = optional(number)
+            maintenance_configuration_name = optional(string)
+            zone_redundant                 = optional(bool)
+            sku = object({
+              name     = string
+              tier     = string
+              family   = optional(string)
+              capacity = number
+            })
+            per_database_settings = object({
+              min_capacity = number
+              max_capacity = number
+            })
           }
         )))
         tags = optional(map(string), {})
@@ -124,10 +162,11 @@ locals {
   mssql_server_inputs              = var.mssql_server_configs
   mssql_server_rgp                 = try(local.mssql_server_inputs.resource_group_name, null)
   mssql_server_network_rules       = try(local.mssql_server_inputs.network_rules, null)
+  mssql_server_firewall_rules      = try(local.mssql_server_inputs.firewall_rules, [])
   mssql_server_diagnostic_settings = try(local.mssql_server_inputs.diagnostic_settings, null)
   mssql_server_role_assignments    = try(local.mssql_server_inputs.role_assignments, [])
   mssql_server_tags                = try(local.mssql_server_inputs.tags, {})
-  mssql_server_list                = try(local.mssql_server_inputs.mssql_servers, [])
+  mssql_server_list                = try(local.mssql_server_inputs.servers, [])
 
 
   mssql_server_resource_groups = distinct([
@@ -165,7 +204,7 @@ locals {
           subnet_id = id
         }
       ]
-      firewall_rules = [
+      firewall_rules = distinct(concat(local.mssql_server_firewall_rules, [
         for key, ip_range in distinct(concat(
           ["0.0.0.0"],
           local.network_rules.public_ip_ranges,
@@ -175,7 +214,7 @@ locals {
           start_ip_address = trimsuffix(ip_range, "/32")
           end_ip_address   = trimsuffix(ip_range, "/32")
         } if basename(ip_range) == "32"
-      ]
+      ]))
       diagnostic_settings = try(length(local.mssql_server_diagnostic_settings) > 0, false) ? [
         for setting in local.mssql_server_diagnostic_settings.settings : {
           name   = setting.name
@@ -197,15 +236,13 @@ locals {
       version                      = mssql_server.version
       administrator_login          = lower(format("%s-admin", mssql_server.name))
       administrator_login_password = random_password.sql_server_password["sql_server_password"].result
-      azuread_administrator = try(length(mssql_server.azuread_administrator), 0) > 0 ? merge(mssql_server.azuread_administrator, {
-        tenant_id = local.client_tenant_id
-      }) : null
-      connection_policy   = mssql_server.connection_policy
-      identity            = mssql_server.identity
-      minimum_tls_version = "1.2"
-      ## TODO
-      primary_user_assigned_identity_id = null
-      databases                         = mssql_server.databases
+      azuread_administrator        = mssql_server.azuread_administrator
+      connection_policy            = mssql_server.connection_policy
+      identity                     = mssql_server.identity
+      minimum_tls_version          = "1.2"
+      primary_user_identity_name   = mssql_server.primary_user_identity_name
+      databases                    = mssql_server.databases
+      elastic_pools                = mssql_server.elastic_pools
     }
   }
 
@@ -233,7 +270,7 @@ locals {
 }
 
 resource "random_password" "sql_server_password" {
-  for_each    = length(var.mssql_server_configs) > 0 ? local.sql_server_passwords : {}
+  for_each    = try(length(var.mssql_server_configs), 0) > 0 ? local.sql_server_passwords : {}
   length      = each.value.length
   lower       = each.value.lower
   min_lower   = each.value.min_lower

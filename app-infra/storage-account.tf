@@ -82,16 +82,7 @@ variable "storage_acc_configs" {
               }
             )
           }
-          ), {
-          versioning_enabled  = true
-          change_feed_enabled = null
-          container_delete_retention_policy = {
-            days = 30
-          }
-          delete_retention_policy = {
-            days = 30
-          }
-        })
+        ))
         containers = optional(list(object({
           name                  = string
           container_access_type = optional(string, "private")
@@ -229,7 +220,7 @@ locals {
 module "storage_accounts" {
   source              = "./modules/src/storage-account"
   storage_acc_configs = local.storage_acc_configs
-  app_key_vault_id        = local.infra_keyvault_id
+  app_key_vault_id    = local.infra_keyvault_id
 }
 
 output "storage_accounts" {

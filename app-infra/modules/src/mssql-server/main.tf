@@ -3,6 +3,10 @@ locals {
   mssql_server_config = {
     for mssql_server_config in var.mssql_server_configs : mssql_server_config.resource_key => mssql_server_config
   }
+
+  mssql_server_with_user_identities = {
+    for sql_key, sql_config in local.mssql_server_config : sql_key => sql_config if try(length(sql_config.identity.user_identity_names) > 0, false)
+  }
 }
 
 resource "azurerm_mssql_server" "sql_server" {
@@ -16,7 +20,7 @@ resource "azurerm_mssql_server" "sql_server" {
   administrator_login               = each.value.administrator_login
   administrator_login_password      = each.value.administrator_login_password
   connection_policy                 = each.value.connection_policy
-  primary_user_assigned_identity_id = each.value.primary_user_assigned_identity_id
+  primary_user_assigned_identity_id = each.value.primary_user_identity_name != null ? azurerm_user_assigned_identity.user_assigned_identity[format("%s/%s", each.key, each.value.primary_user_identity_name)].id : null
 
   dynamic "azuread_administrator" {
     for_each = try(length(each.value.azuread_administrator), 0) > 0 ? [each.value.azuread_administrator] : []
@@ -24,17 +28,20 @@ resource "azurerm_mssql_server" "sql_server" {
     content {
       login_username              = lookup(azuread_administrator.value, "login_username", null)
       object_id                   = lookup(azuread_administrator.value, "object_id", null)
-      tenant_id                   = lookup(azuread_administrator.value, "tenant_id", null)
+      tenant_id                   = data.azurerm_client_config.current.tenant_id
       azuread_authentication_only = lookup(azuread_administrator.value, "azuread_authentication_only", null)
     }
   }
 
   dynamic "identity" {
     for_each = try(length(each.value.identity), 0) > 0 ? [each.value.identity] : []
-
     content {
-      type         = identity.value.type
-      identity_ids = lookup(azuread_administrator.value, "identity_ids", null)
+      type = identity.value.type
+      identity_ids = identity.value.type != "SystemAssigned" ? flatten([
+        for identity in identity.value.user_identity_names : [
+          azurerm_user_assigned_identity.user_assigned_identity[format("%s/%s", each.key, identity)].id
+        ]
+      ]) : null
     }
   }
 
@@ -44,19 +51,21 @@ resource "azurerm_mssql_server" "sql_server" {
 ##Initialize SQL Database PaaS
 locals {
   sql_database_list = flatten([
-    for key, value in local.mssql_server_config : [
-      for db_k, db_v in coalesce(value.databases, []) :
-      merge(db_v, {
-        mssql_server_key    = "${value.resource_group_name}-${value.name}"
-        resource_group_name = value.resource_group_name
-        sql_server_name     = value.name
-        tags                = value.tags
-        diagnostic_settings = value.diagnostic_settings
+    for sql_key, sql_server in local.mssql_server_config : [
+      for sql_db in coalesce(sql_server.databases, []) :
+      merge(sql_db, {
+        sql_db_key          = lower(format("%s/%s", sql_key, sql_db.name))
+        mssql_server_key    = sql_key
+        resource_group_name = sql_server.resource_group_name
+        sql_server_name     = sql_server.name
+        tags                = sql_server.tags
+        diagnostic_settings = sql_server.diagnostic_settings
       })
     ]
   ])
+
   sql_database_map = {
-    for database in local.sql_database_list : "${database.mssql_server_key}-${database.name}" => database
+    for database in local.sql_database_list : database.sql_db_key => database
   }
 }
 
@@ -114,18 +123,16 @@ resource "azurerm_mssql_database" "sql_database" {
 ##Initialize SQL Firewall Rules
 locals {
   sql_firewall_rule_list = flatten([
-    for key, sql_firewall_rule_config in local.mssql_server_config : [
-      for k, v in coalesce(sql_firewall_rule_config.firewall_rules, []) :
-      merge(v, {
-        mssql_server_key    = "${sql_firewall_rule_config.resource_group_name}-${sql_firewall_rule_config.name}"
-        resource_group_name = sql_firewall_rule_config.resource_group_name
-        sql_server_name     = sql_firewall_rule_config.name
+    for sql_key, sql_server in local.mssql_server_config : [
+      for rule in coalesce(sql_server.firewall_rules, []) :
+      merge(rule, {
+        firewall_rule_key = lower(format("%s/%s", sql_key, rule.name))
+        mssql_server_key  = sql_key
       })
     ]
   ])
   sql_firewall_rule_map = {
-    for firewall_rule in local.sql_firewall_rule_list :
-    "${firewall_rule.sql_server_name}-${firewall_rule.resource_group_name}-${firewall_rule.name}" => firewall_rule
+    for firewall_rule in local.sql_firewall_rule_list : firewall_rule.firewall_rule_key => firewall_rule
   }
 }
 
@@ -140,17 +147,16 @@ resource "azurerm_mssql_firewall_rule" "sql_firewall_rule" {
 ##Initialize SQL Virtual Network IDs
 locals {
   sql_virtual_network_rules = flatten([
-    for key, value in local.mssql_server_config : [
-      for vnet_k, vnet_v in coalesce(value.virtual_network_rules, []) :
-      merge(vnet_v, {
-        mssql_server_key    = "${value.resource_group_name}-${value.name}"
-        resource_group_name = value.resource_group_name
-        sql_server_name     = value.name
+    for sql_key, sql_server in local.mssql_server_config : [
+      for vnet_rule in coalesce(sql_server.virtual_network_rules, []) :
+      merge(vnet_rule, {
+        vnet_rule_key    = lower(format("%s/%s", sql_key, sql_server.name))
+        mssql_server_key = sql_key
       })
     ]
   ])
   sql_virtual_network_rules_map = {
-    for vnet_rule in local.sql_virtual_network_rules : "${vnet_rule.mssql_server_key}-${vnet_rule.name}" => vnet_rule
+    for vnet_rule in local.sql_virtual_network_rules : vnet_rule.vnet_rule_key => vnet_rule
   }
 }
 

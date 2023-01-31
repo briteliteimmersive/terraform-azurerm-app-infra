@@ -2,13 +2,6 @@ locals {
   app_key_vault_id = var.app_key_vault_id
 }
 
-resource "azurerm_key_vault_secret" "azuread_administrator" {
-  for_each     = local.mssql_server_config
-  name         = upper(replace(format("%s-server-azuread-admin", each.value.name), "_", "-"))
-  value        = azurerm_mssql_server.sql_server[each.key].azuread_administrator[0].login_username
-  key_vault_id = local.app_key_vault_id
-}
-
 resource "azurerm_key_vault_secret" "sql_fqdn" {
   for_each     = local.mssql_server_config
   name         = upper(replace(format("%s-server-fqdn", each.value.name), "_", "-"))

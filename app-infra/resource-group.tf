@@ -3,7 +3,8 @@ locals {
   resource_group_config = tolist(toset(concat(
     local.mssql_server_resource_groups,
     local.keyvault_resource_groups,
-    local.storage_resource_groups
+    local.storage_resource_groups,
+    local.synapse_resource_groups
   )))
 
 }

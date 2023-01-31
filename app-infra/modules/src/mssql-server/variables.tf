@@ -1,29 +1,28 @@
 variable "mssql_server_configs" {
   type = list(object(
     {
-      resource_key                      = string
-      name                              = string
-      resource_group_name               = string
-      location                          = string
-      version                           = string
-      connection_policy                 = string #Default,Proxy,Redirect
-      minimum_tls_version               = string
-      administrator_login               = string
-      administrator_login_password      = string
-      connection_policy                 = string
-      primary_user_assigned_identity_id = string
+      resource_key                 = string
+      name                         = string
+      resource_group_name          = string
+      location                     = string
+      version                      = string
+      connection_policy            = string #Default,Proxy,Redirect
+      minimum_tls_version          = string
+      administrator_login          = string
+      administrator_login_password = string
+      connection_policy            = string
+      primary_user_identity_name   = string
       azuread_administrator = object(
         {
           login_username              = string
           object_id                   = string
-          tenant_id                   = string
           azuread_authentication_only = bool
         }
       )
       identity = object(
         {
-          principal_id = string
-          tenant_id    = string
+          type                = string
+          user_identity_names = list(string)
         }
       )
       firewall_rules = list(object(
@@ -74,6 +73,26 @@ variable "mssql_server_configs" {
           }
         )
       }))
+      elastic_pools = list(object(
+        {
+          name                           = string
+          license_type                   = string
+          max_size_gb                    = number
+          max_size_bytes                 = number
+          maintenance_configuration_name = string
+          zone_redundant                 = bool
+          sku = object({
+            name     = string
+            tier     = string
+            family   = string
+            capacity = number
+          })
+          per_database_settings = object({
+            min_capacity = number
+            max_capacity = number
+          })
+        }
+      ))
       diagnostic_settings = list(object(
         {
           name                         = string
