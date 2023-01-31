@@ -76,7 +76,7 @@ variable "storage_acc_configs" {
           }
         ))
         tags = map(string)
-        storage_containers = list(object({
+        containers = list(object({
           name                  = string
           container_access_type = string
           metadata              = map(string)

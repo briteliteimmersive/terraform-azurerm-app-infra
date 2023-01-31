@@ -197,8 +197,8 @@ locals {
         (lower(try(storage.account_tier, "Standard")) == "premium" && lower(try(storage.account_kind, "StorageV2")) == "blockblobstorage")
       ) ? storage.infrastructure_encryption_enabled : false
       cross_tenant_replication_enabled = storage.cross_tenant_replication_enabled
-      storage_containers = try(length(storage.storage_containers), 0) > 0 ? [
-        for container in storage.storage_containers : {
+      containers = try(length(storage.containers), 0) > 0 ? [
+        for container in storage.containers : {
           name                  = container.name
           container_access_type = try(container.container_access_type, "private")
           metadata              = try(container.metadata, {})
