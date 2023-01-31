@@ -42,6 +42,7 @@ variable "mssql_server_configs" {
         name                        = string
         max_size_gb                 = number
         sku_name                    = string
+        elastic_pool_name           = string
         zone_redundant              = bool
         auto_pause_delay_in_minutes = string
         collation                   = string

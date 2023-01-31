@@ -91,6 +91,7 @@ variable "mssql_server_configs" {
             license_type                = optional(string)
             read_replica_count          = optional(number)
             storage_account_type        = optional(string)
+            elastic_pool_name           = optional(string)
             short_term_retention_policy = optional(object(
               {
                 backup_interval_in_hours = number
