@@ -83,6 +83,7 @@ resource "azurerm_mssql_database" "sql_database" {
   read_replica_count          = each.value.read_replica_count
   storage_account_type        = each.value.storage_account_type
   min_capacity                = each.value.min_capacity
+  elastic_pool_id             = each.value.elastic_pool_name != null ? azurerm_mssql_elasticpool.msql_elastic_pool[lower(format("%s/%s", each.value.mssql_server_key, each.value.elastic_pool_name))].id : null
 
   dynamic "short_term_retention_policy" {
     for_each = try(length(each.value.short_term_retention_policy), 0) > 0 ? [each.value.short_term_retention_policy] : []
