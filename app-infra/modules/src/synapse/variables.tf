@@ -57,8 +57,8 @@ variable "synapse_configs" {
         )
         workspace_role_assignments = list(object(
           {
-            role_name = string
-            object_id = string
+            role_name  = string
+            object_ids = list(string)
           }
         ))
         firewall_rules = list(object(

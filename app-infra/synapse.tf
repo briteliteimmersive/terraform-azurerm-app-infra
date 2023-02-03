@@ -110,8 +110,8 @@ variable "synapse_configs" {
         ))
         workspace_role_assignments = optional(list(object(
           {
-            role_name = string
-            object_id = string
+            role_name  = string
+            object_ids = list(string)
           }
         )), [])
         identity = optional(object(
