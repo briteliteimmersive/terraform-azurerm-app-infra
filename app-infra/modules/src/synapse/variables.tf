@@ -61,6 +61,14 @@ variable "synapse_configs" {
             object_ids = list(string)
           }
         ))
+        workspace_linked_services = list(object(
+          {
+            name                 = string
+            type                 = string
+            type_properties_json = string
+            linked_service_id    = string
+          }
+        ))
         firewall_rules = list(object(
           {
             name             = string
