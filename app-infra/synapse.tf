@@ -114,6 +114,13 @@ variable "synapse_configs" {
             object_ids = list(string)
           }
         )), [])
+        workspace_linked_services = optional(list(object(
+          {
+            resource_name   = string
+            type            = string
+            type_properties = map(string)
+          }
+        )), [])
         identity = optional(object(
           {
             type                = string
@@ -198,6 +205,14 @@ locals {
       customer_managed_key_name            = synapse.customer_managed_key_name
       workspace_aad_admin                  = synapse.workspace_aad_admin
       workspace_role_assignments           = synapse.workspace_role_assignments
+      workspace_linked_services = [
+        for linked_service in synapse.workspace_linked_services : {
+          name                 = lower(format("%s_%s", linked_service.resource_name, linked_service.type))
+          type                 = linked_service.type
+          type_properties_json = jsonencode(linked_service.type_properties)
+          linked_service_id    = lower(linked_service.type) == "azurekeyvault" ? module.keyvault.outputs[local.keyvault_configs_map[linked_service.resource_name].resource_key].id : null
+        }
+      ]
       firewall_rules = distinct(concat(local.synapse_firewall_rules, [{
         name             = "AllowAllWindowsAzureIps"
         start_ip_address = "0.0.0.0"
