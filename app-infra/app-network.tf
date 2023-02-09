@@ -2,6 +2,13 @@ locals {
   vnet_name                = try(local.app_network.vnet_name, null)
   vnet_resource_group_name = try(local.app_network.vnet_resource_group_name, null)
 
+  vnet_id = format(
+    "/subscriptions/%s/resourceGroups/%s/providers/Microsoft.Network/virtualNetworks/%s",
+    local.subscription_id,
+    local.vnet_resource_group_name,
+    local.vnet_name
+  )
+
   vnet_info = local.vnet_name != null && local.vnet_resource_group_name != null ? {
     lower(format("%s/%s", local.vnet_name, local.vnet_resource_group_name)) = {
       resource_key        = lower(format("%s/%s", local.vnet_name, local.vnet_resource_group_name))
@@ -19,12 +26,6 @@ locals {
     }
   }
 
-  #   subnet_virtual_networks = {
-  #     for subnet in try(local.global_config.subnets, []) : "${subnet}" => {
-  #       name                = local.vnet_name
-  #       resource_group_name = local.vnet_resource_group_name
-  #     }
-  #   }
 }
 
 ## Get subnet IDs
@@ -43,4 +44,5 @@ locals {
   udr_ids_by_subnet_name = {
     for value in data.azurerm_subnet.subnets : value.name => value.route_table_id
   }
+
 }
