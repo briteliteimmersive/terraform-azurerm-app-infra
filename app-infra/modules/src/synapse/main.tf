@@ -55,7 +55,7 @@ resource "azurerm_synapse_workspace" "synapse_workspace" {
       type = identity.value.type
       identity_ids = identity.value.type != "SystemAssigned" ? flatten([
         for identity in identity.value.user_identity_names : [
-          azurerm_user_assigned_identity.user_assigned_identity[format("%s/%s", each.key, identity)].id
+          azurerm_user_assigned_identity.user_assigned_identity[lower(format("%s/%s", each.key, identity))].id
         ]
       ]) : null
     }
