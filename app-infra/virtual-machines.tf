@@ -145,6 +145,8 @@ locals {
   linux_vm_common_settings     = try(local.linux_vm_inputs.common_vm_settings, null)
   linux_vm_list                = try(local.linux_vm_inputs.vms, [])
 
+  enable_vm_vulnerability_assessment = try(local.linux_vm_common_settings.enable_vm_vulnerability_assessment, false)
+
   vm_resource_groups = distinct([
     for vm in local.linux_vm_list : {
       name             = coalesce(vm.resource_group_name, local.linux_vm_rgp)
@@ -256,7 +258,7 @@ locals {
   ## VM secrets
   username_key = "VM-ADMIN-USERNAME"
   password_key = "VM-ADMIN-PASSWORD"
-  linux_vm_secrets = length(var.linux_vm_configs) > 0 ? [
+  linux_vm_secrets = try(length(var.linux_vm_configs) > 0, false) ? [
     {
       secret_key   = replace(upper(format("%s-LINUX-%s", local.environment, local.username_key)), " ", "-")
       secret_value = local.admin_username
@@ -270,7 +272,7 @@ locals {
 }
 
 resource "random_password" "vm_password" {
-  for_each    = length(var.linux_vm_configs) > 0 ? local.admin_linux_vm_password_policy : {}
+  for_each    = try(length(var.linux_vm_configs) > 0, false) ? local.admin_linux_vm_password_policy : {}
   length      = each.value.length
   lower       = each.value.lower
   min_lower   = each.value.min_lower
@@ -282,7 +284,7 @@ resource "random_password" "vm_password" {
 module "linux_virtual_machine" {
   source                             = "./modules/src/linux-virtual-machine"
   virtual_machine_configs            = local.linux_vm_configs
-  enable_vm_vulnerability_assessment = local.linux_vm_common_settings.enable_vm_vulnerability_assessment
+  enable_vm_vulnerability_assessment = local.enable_vm_vulnerability_assessment
   disk_encryption_set_id             = local.admin_disk_encryption_set_id
   backup_settings                    = local.admin_vm_backup_settings
 }

@@ -8,6 +8,7 @@ variable "cosmosdb_configs" {
     kind                      = string
     enable_automatic_failover = bool
     capabilities              = list(string)
+    cmk_encryption_enabled    = bool
     consistency_policy = object({
       consistency_level       = string
       max_interval_in_seconds = number
@@ -24,7 +25,6 @@ variable "cosmosdb_configs" {
     enable_free_tier                      = bool
     public_network_access_enabled         = bool
     is_virtual_network_filter_enabled     = bool
-    key_vault_key_id                      = string
     enable_multiple_write_locations       = bool
     access_key_metadata_writes_enabled    = bool
     mongo_server_version                  = string
@@ -111,4 +111,13 @@ variable "cosmosdb_configs" {
     )
     tags = map(string)
   }))
+}
+
+variable "app_key_vault_id" {
+  type    = string
+  default = null
+}
+
+variable "admin_key_vault_id" {
+  type = string
 }

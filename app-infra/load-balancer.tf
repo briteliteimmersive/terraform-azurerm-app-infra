@@ -141,7 +141,7 @@ locals {
   lb_rgp                 = try(local.lb_inputs.resource_group_name, null)
   lb_network_rules       = try(local.lb_inputs.network_rules, null)
   lb_diagnostic_settings = try(local.lb_inputs.diagnostic_settings, null)
-  lb_role_assignments    = local.lb_inputs.role_assignments
+  lb_role_assignments    = try(local.lb_inputs.role_assignments, null)
   lb_tags                = try(local.lb_inputs.tags, {})
   lb_list                = try(local.lb_inputs.load_balancers, [])
 

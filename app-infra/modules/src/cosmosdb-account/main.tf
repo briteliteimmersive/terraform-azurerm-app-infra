@@ -1,7 +1,20 @@
 locals {
   cosmosdb_configs = {
-    for cosmosdb_key, cosmosdb_config in var.cosmosdb_configs : cosmosdb_config.resource_key => cosmosdb_config
+    for cosmosdb_config in var.cosmosdb_configs : cosmosdb_config.resource_key => merge(cosmosdb_config, {
+      cmk_key = lower(format("%s/customer-managed-key", cosmosdb_config.resource_key))
+    })
   }
+
+  cosmosdb_with_cmk_encryption = {
+    for cosmosdb_key, cosmosdb_config in local.cosmosdb_configs : cosmosdb_key => cosmosdb_config
+    if cosmosdb_config.cmk_encryption_enabled
+  }
+
+  cosmosdb_with_user_identities = {
+    for cosmosdb_key, cosmosdb_config in local.cosmosdb_configs : cosmosdb_key => cosmosdb_config
+    if try(length(cosmosdb_config.identity.user_identity_names) > 0, false)
+  }
+
 }
 
 resource "azurerm_cosmosdb_account" "cosmosdb_account" {
@@ -37,7 +50,7 @@ resource "azurerm_cosmosdb_account" "cosmosdb_account" {
   enable_free_tier                      = each.value.enable_free_tier
   public_network_access_enabled         = each.value.public_network_access_enabled
   is_virtual_network_filter_enabled     = each.value.is_virtual_network_filter_enabled
-  key_vault_key_id                      = each.value.key_vault_key_id
+  key_vault_key_id                      = azurerm_key_vault_key.encryption_key[each.value.cmk_key].versionless_id
   enable_multiple_write_locations       = each.value.enable_multiple_write_locations
   access_key_metadata_writes_enabled    = each.value.access_key_metadata_writes_enabled
   mongo_server_version                  = each.value.mongo_server_version
@@ -87,6 +100,11 @@ resource "azurerm_cosmosdb_account" "cosmosdb_account" {
     for_each = each.value.identity != null ? [each.value.identity] : []
     content {
       type = identity.value.type
+      identity_ids = identity.value.type != "SystemAssigned" ? flatten([
+        for identity in identity.value.user_identity_names : [
+          azurerm_user_assigned_identity.user_assigned_identity[lower(format("%s/%s", each.key, identity))].id
+        ]
+      ]) : null
     }
   }
   dynamic "restore" {
@@ -104,5 +122,9 @@ resource "azurerm_cosmosdb_account" "cosmosdb_account" {
     }
   }
   tags = each.value.tags
+
+  depends_on = [
+    azurerm_role_assignment.key_vault_role_assignment
+  ]
 
 }

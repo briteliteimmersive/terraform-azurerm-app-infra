@@ -62,6 +62,7 @@ variable "cosmosdb_configs" {
         kind                      = optional(string)
         enable_automatic_failover = optional(bool)
         capabilities              = optional(list(string))
+        cmk_encryption_enabled    = optional(bool, true)
         consistency_policy = object({
           consistency_level       = string
           max_interval_in_seconds = number
@@ -105,7 +106,7 @@ variable "cosmosdb_configs" {
         identity = optional(object(
           {
             type                = string
-            user_identity_names = list(string)
+            user_identity_names = optional(list(string))
           }
         ))
         mongodb_databases = optional(list(
@@ -243,8 +244,8 @@ locals {
       cors_rule                             = cosmosdb.cors_rule
       identity                              = cosmosdb.identity
       mongodb_databases                     = cosmosdb.mongodb_databases
+      cmk_encryption_enabled                = cosmosdb.cmk_encryption_enabled
       ## TODO
-      key_vault_key_id       = null
       network_acl_bypass_ids = null
       restore                = null
     }
@@ -264,8 +265,10 @@ locals {
 }
 
 module "cosmosdb" {
-  source           = "./modules/src/cosmosdb-account"
-  cosmosdb_configs = local.cosmosdb_configs
+  source             = "./modules/src/cosmosdb-account"
+  cosmosdb_configs   = local.cosmosdb_configs
+  app_key_vault_id   = local.infra_keyvault_id
+  admin_key_vault_id = local.admin_key_vault_id
 }
 
 module "cosmosdb_mongodb" {
