@@ -1,4 +1,4 @@
-variable "linux_vm_configs" {
+variable "windows_vm_configs" {
   type = object({
     resource_group_name = string
     diagnostic_settings = optional(object(
@@ -47,16 +47,17 @@ variable "linux_vm_configs" {
     ), [])
     tags = optional(map(string), {})
     common_vm_settings = object({
-      subnet_name = string
+      subnet_name    = string
+      admin_username = optional(string, "svsupervisor")
       source_image_reference = optional(object({
         publisher = string
         offer     = string
         sku       = string
         version   = string
         }), {
-        publisher = "Canonical"
-        offer     = "0001-com-ubuntu-server-focal"
-        sku       = "20_04-lts"
+        publisher = "MicrosoftWindowsServer"
+        offer     = "WindowsServer"
+        sku       = "2022-Datacenter"
         version   = "latest"
       })
       source_image_id = optional(string)
@@ -127,6 +128,30 @@ variable "linux_vm_configs" {
             lb_backend_pool_name   = string
           }
         ))
+        sql_extension = optional(object(
+          {
+            sql_license_type      = optional(string, "PAYG")
+            r_services_enabled    = optional(bool, false)
+            sql_connectivity_port = optional(number, 1433)
+            sql_connectivity_type = optional(string, "PRIVATE")
+            role_assignments = optional(list(
+              object(
+                {
+                  role_definition_id = string
+                  object_ids         = list(string)
+                }
+              )
+            ), [])
+            tags = optional(map(string), {})
+          }
+          ), {
+          sql_license_type      = "PAYG"
+          r_services_enabled    = false
+          sql_connectivity_port = 1433
+          sql_connectivity_type = "PRIVATE"
+          role_assignments      = []
+          tags                  = {}
+        })
         tags = optional(map(string))
       }
     ))
@@ -137,63 +162,61 @@ variable "linux_vm_configs" {
 
 locals {
 
-  linux_vm_inputs              = var.linux_vm_configs
-  linux_vm_rgp                 = try(local.linux_vm_inputs.resource_group_name, null)
-  linux_vm_diagnostic_settings = try(local.linux_vm_inputs.diagnostic_settings, null)
-  linux_vm_role_assignments    = try(local.linux_vm_inputs.role_assignments, [])
-  linux_vm_tags                = try(local.linux_vm_inputs.tags, {})
-  linux_vm_common_settings     = try(local.linux_vm_inputs.common_vm_settings, null)
-  linux_vm_list                = try(local.linux_vm_inputs.vms, [])
+  windows_vm_inputs              = var.windows_vm_configs
+  windows_vm_rgp                 = try(local.windows_vm_inputs.resource_group_name, null)
+  windows_vm_diagnostic_settings = try(local.windows_vm_inputs.diagnostic_settings, null)
+  windows_vm_role_assignments    = try(local.windows_vm_inputs.role_assignments, [])
+  windows_vm_tags                = try(local.windows_vm_inputs.tags, {})
+  windows_vm_common_settings     = try(local.windows_vm_inputs.common_vm_settings, null)
+  windows_vm_list                = try(local.windows_vm_inputs.vms, [])
 
-  enable_vm_vulnerability_assessment = try(local.linux_vm_common_settings.enable_vm_vulnerability_assessment, false)
-
-  vm_resource_groups = distinct([
-    for vm in local.linux_vm_list : {
-      name             = coalesce(vm.resource_group_name, local.linux_vm_rgp)
-      resource_key     = lower(coalesce(vm.resource_group_name, local.linux_vm_rgp))
+  windows_vm_resource_groups = distinct([
+    for vm in local.windows_vm_list : {
+      name             = coalesce(vm.resource_group_name, local.windows_vm_rgp)
+      resource_key     = lower(coalesce(vm.resource_group_name, local.windows_vm_rgp))
       role_assignments = local.role_assignments
       location         = local.location
       tags             = local.common_resource_tags
     }
   ])
 
-  linux_vm_configs_map = {
-    for vm in local.linux_vm_list : vm.hostname => {
+  windows_vm_configs_map = {
+    for vm in local.windows_vm_list : vm.hostname => {
       resource_key = lower(format(
         "%s/%s",
-        coalesce(vm.resource_group_name, local.linux_vm_rgp),
+        coalesce(vm.resource_group_name, local.windows_vm_rgp),
         vm.hostname
       ))
-      resource_group_name = module.resource_groups.outputs[lower(coalesce(vm.resource_group_name, local.linux_vm_rgp))].name
+      resource_group_name = module.resource_groups.outputs[lower(coalesce(vm.resource_group_name, local.windows_vm_rgp))].name
       location            = local.location
       tags = merge(
-        local.linux_vm_tags,
+        local.windows_vm_tags,
         vm.tags,
         local.common_resource_tags
       )
-      diagnostic_settings = try(length(local.linux_vm_diagnostic_settings) > 0, false) ? [
-        for setting in local.linux_vm_diagnostic_settings.settings : {
+      diagnostic_settings = try(length(local.windows_vm_diagnostic_settings) > 0, false) ? [
+        for setting in local.windows_vm_diagnostic_settings.settings : {
           name   = setting.name
           log    = setting.log
           metric = setting.metric
           log_analytics_workspace_name = try(
-            local.linux_vm_diagnostic_settings.log_analytics_workspace_name,
+            local.windows_vm_diagnostic_settings.log_analytics_workspace_name,
             null
           )
           log_analytics_workspace_id = try(
-            local.linux_vm_diagnostic_settings.log_analytics_workspace_id,
-            # module.log_analytics.outputs[local.linux_vm_diagnostic_settings.log_analytics_workspace_name].id, ## Needs fixing
+            local.windows_vm_diagnostic_settings.log_analytics_workspace_id,
+            # module.log_analytics.outputs[local.windows_vm_diagnostic_settings.log_analytics_workspace_name].id, ## Needs fixing
             null
           )
         }
       ] : []
-      role_assignments                = local.linux_vm_role_assignments
+      role_assignments                = local.windows_vm_role_assignments
       hostname                        = vm.hostname
-      admin_username                  = local.admin_username
-      admin_password                  = random_password.vm_password["linux"].result
-      enable_accelerated_networking   = coalesce(vm.enable_accelerated_networking, local.linux_vm_common_settings.enable_accelerated_networking)
+      admin_username                  = local.windows_vm_common_settings.admin_username
+      admin_password                  = random_password.win_vm_password["windows"].result
+      enable_accelerated_networking   = coalesce(vm.enable_accelerated_networking, local.windows_vm_common_settings.enable_accelerated_networking)
       disable_password_authentication = false
-      size                            = coalesce(vm.size, local.linux_vm_common_settings.size)
+      size                            = coalesce(vm.size, local.windows_vm_common_settings.size)
       zone                            = vm.zone
       boot_diagnostics = {
         storage_account_uri = local.admin_vm_boot_diagnostics_storage_uri
@@ -201,78 +224,36 @@ locals {
       ip_configuration = [
         {
           name                          = "IPv4-CONFIG"
-          subnet_id                     = local.subnet_ids_by_name[coalesce(vm.subnet_name, local.linux_vm_common_settings.subnet_name)]
+          subnet_id                     = local.subnet_ids_by_name[coalesce(vm.subnet_name, local.windows_vm_common_settings.subnet_name)]
           private_ip_address_allocation = "Static"
           private_ip_address            = vm.ip_address
         }
       ]
-      os_disk = coalesce(vm.os_disk, local.linux_vm_common_settings.os_disk)
-      plan    = try(coalesce(vm.plan, local.linux_vm_common_settings.plan), null)
+      os_disk = coalesce(vm.os_disk, local.windows_vm_common_settings.os_disk)
+      plan    = try(coalesce(vm.plan, local.windows_vm_common_settings.plan), null)
       ## Image id takes preference
-      source_image_reference = try(coalesce(vm.source_image_id, local.linux_vm_common_settings.source_image_id), null) == null ? coalesce(
-        vm.source_image_reference, local.linux_vm_common_settings.source_image_reference
+      source_image_reference = try(coalesce(vm.source_image_id, local.windows_vm_common_settings.source_image_id), null) == null ? coalesce(
+        vm.source_image_reference, local.windows_vm_common_settings.source_image_reference
       ) : null
-      source_image_id = try(coalesce(vm.source_image_id, local.linux_vm_common_settings.source_image_id), null)
+      source_image_id = try(coalesce(vm.source_image_id, local.windows_vm_common_settings.source_image_id), null)
       datadisks = [
-        for disk in coalesce(vm.datadisks, local.linux_vm_common_settings.datadisks) : merge(disk, {
+        for disk in coalesce(vm.datadisks, local.windows_vm_common_settings.datadisks) : merge(disk, {
           zone = vm.zone
         })
       ]
+
+      sql_extension = try(lower(coalesce(vm.source_image_reference.publisher, local.windows_vm_common_settings.source_image_reference.publisher)) == "microsoftsqlserver", false) ? merge(vm.sql_extension, {
+        tags = merge(local.windows_vm_tags, vm.tags, local.common_resource_tags)
+      }) : null
     }
   }
 
-  linux_vm_configs = values(local.linux_vm_configs_map)
-
-  loadbalancer_backend_pool_address_list = flatten([
-    for vm_details in local.linux_vm_list : [
-      {
-        name       = vm_details.hostname
-        ip_address = vm_details.ip_address
-        load_balancer_backend_pool_key = try(
-          lower(format("%s/%s/%s",
-            vm_details.load_balancing_configuration.lb_resource_group_name,
-            vm_details.load_balancing_configuration.lb_name,
-            vm_details.load_balancing_configuration.lb_backend_pool_name
-          )),
-          lower(format("%s/%s/%s",
-            coalesce(vm_details.resource_group_name, local.linux_vm_rgp),
-            vm_details.load_balancing_configuration.lb_name,
-            vm_details.load_balancing_configuration.lb_backend_pool_name
-          ))
-        )
-        virtual_network_id = local.vnet_id
-      }
-    ] if vm_details.load_balancing_configuration != null
-  ])
-
-  distinct_load_balancer_backend_pool_keys = distinct([
-    for lb_config in local.loadbalancer_backend_pool_address_list : lb_config.load_balancer_backend_pool_key
-  ])
-
-  loadbalancer_backend_pool_address = {
-    for pool_key in local.distinct_load_balancer_backend_pool_keys : pool_key => [
-      for lb_config in local.loadbalancer_backend_pool_address_list : lb_config if lb_config.load_balancer_backend_pool_key == pool_key
-    ]
-  }
-
-  ## VM secrets
-  username_key = "VM-ADMIN-USERNAME"
-  password_key = "VM-ADMIN-PASSWORD"
-  linux_vm_secrets = try(length(var.linux_vm_configs) > 0, false) ? [
-    {
-      secret_key   = replace(upper(format("%s-LINUX-%s", local.environment, local.username_key)), " ", "-")
-      secret_value = local.admin_username
-    },
-    {
-      secret_key   = replace(upper(format("%s-LINUX-%s", local.environment, local.password_key)), " ", "-")
-      secret_value = random_password.vm_password["linux"].result
-    }
-  ] : []
+  windows_vm_configs = values(local.windows_vm_configs_map)
 
 }
 
-resource "random_password" "vm_password" {
-  for_each    = try(length(var.linux_vm_configs) > 0, false) ? local.admin_linux_vm_password_policy : {}
+resource "random_password" "win_vm_password" {
+  for_each    = try(length(var.windows_vm_configs) > 0, false) ? local.admin_windows_vm_password_policy : {}
   length      = each.value.length
   lower       = each.value.lower
   min_lower   = each.value.min_lower
@@ -281,10 +262,11 @@ resource "random_password" "vm_password" {
   min_special = each.value.min_special
 }
 
-module "linux_virtual_machine" {
-  source                             = "./modules/src/linux-virtual-machine"
-  virtual_machine_configs            = local.linux_vm_configs
+module "windows_virtual_machine" {
+  source                             = "./modules/src/windows-virtual-machine"
+  virtual_machine_configs            = local.windows_vm_configs
   enable_vm_vulnerability_assessment = local.enable_vm_vulnerability_assessment
   disk_encryption_set_id             = local.admin_disk_encryption_set_id
   backup_settings                    = local.admin_vm_backup_settings
+  app_key_vault_id                   = local.infra_keyvault_id
 }

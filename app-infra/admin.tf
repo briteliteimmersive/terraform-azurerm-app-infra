@@ -42,10 +42,19 @@ locals {
     backup_policy_name  = local.admin_vm_backup_policy
   }
 
-  admin_username = "svsupervisor"
-
   admin_linux_vm_password_policy = {
     "linux" = {
+      length      = 16
+      lower       = true
+      min_lower   = 1
+      min_upper   = 2
+      min_numeric = 1
+      min_special = 1
+    }
+  }
+
+  admin_windows_vm_password_policy = {
+    "windows" = {
       length      = 16
       lower       = true
       min_lower   = 1

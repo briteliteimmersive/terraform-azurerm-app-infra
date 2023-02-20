@@ -4,10 +4,11 @@ locals {
     local.cosmosdb_resource_groups,
     local.keyvault_resource_groups,
     local.lb_resource_groups,
+    local.linux_vm_resource_groups,
     local.mssql_server_resource_groups,
     local.storage_resource_groups,
     local.synapse_resource_groups,
-    local.vm_resource_groups
+    local.windows_vm_resource_groups
   )))
 
 }

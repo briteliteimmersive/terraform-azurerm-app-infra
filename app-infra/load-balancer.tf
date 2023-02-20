@@ -221,6 +221,40 @@ locals {
 
   lb_configs = values(local.lb_configs_map)
 
+
+  ## Load balancer pool from VM objects
+  loadbalancer_backend_pool_address_list = flatten([
+    for vm_details in concat(local.linux_vm_list, local.windows_vm_list) : [
+      {
+        name       = vm_details.hostname
+        ip_address = vm_details.ip_address
+        load_balancer_backend_pool_key = try(
+          lower(format("%s/%s/%s",
+            vm_details.load_balancing_configuration.lb_resource_group_name,
+            vm_details.load_balancing_configuration.lb_name,
+            vm_details.load_balancing_configuration.lb_backend_pool_name
+          )),
+          lower(format("%s/%s/%s",
+            coalesce(vm_details.resource_group_name, local.linux_vm_rgp),
+            vm_details.load_balancing_configuration.lb_name,
+            vm_details.load_balancing_configuration.lb_backend_pool_name
+          ))
+        )
+        virtual_network_id = local.vnet_id
+      }
+    ] if vm_details.load_balancing_configuration != null
+  ])
+
+  distinct_load_balancer_backend_pool_keys = distinct([
+    for lb_config in local.loadbalancer_backend_pool_address_list : lb_config.load_balancer_backend_pool_key
+  ])
+
+  loadbalancer_backend_pool_address = {
+    for pool_key in local.distinct_load_balancer_backend_pool_keys : pool_key => [
+      for lb_config in local.loadbalancer_backend_pool_address_list : lb_config if lb_config.load_balancer_backend_pool_key == pool_key
+    ]
+  }
+
 }
 
 module "loadbalancer" {
