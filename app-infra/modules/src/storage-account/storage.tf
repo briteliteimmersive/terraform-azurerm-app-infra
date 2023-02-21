@@ -2,37 +2,8 @@ locals {
   storage_config = {
     for storage_config in var.storage_acc_configs : storage_config.resource_key => storage_config
   }
-  storage_container_list = flatten([
-    for storage_key, storage_config in local.storage_config : [
-      for k, v in coalesce(storage_config.containers, []) :
-      {
-        name                  = v.name
-        container_access_type = v.container_access_type
-        storage_key           = storage_key
-        metadata              = v.metadata
-      }
-    ]
-  ])
 
-  containers = {
-    for container in local.storage_container_list :
-    lower(format("%s/%s", container.storage_key, container.name)) => container
-  }
 
-  storage_share_list = flatten([
-    for storage_key, storage_config in local.storage_config : [
-      for k, v in coalesce(storage_config.file_shares, []) : merge(
-        {
-          storage_key = storage_key
-        }
-      , v)
-    ]
-  ])
-
-  storage_shares = {
-    for file_share in local.storage_share_list :
-    lower(format("%s/%s", file_share.storage_key, file_share.name)) => file_share
-  }
 }
 
 resource "azurerm_storage_account" "storage_account" {
@@ -50,6 +21,7 @@ resource "azurerm_storage_account" "storage_account" {
   account_replication_type          = each.value.account_replication_type
   min_tls_version                   = each.value.min_tls_version
   is_hns_enabled                    = each.value.is_hns_enabled
+  sftp_enabled                      = each.value.sftp_enabled
   large_file_share_enabled          = each.value.large_file_share_enabled
   allow_nested_items_to_be_public   = each.value.allow_nested_items_to_be_public
   infrastructure_encryption_enabled = each.value.infrastructure_encryption_enabled
@@ -90,21 +62,4 @@ resource "azurerm_storage_account" "storage_account" {
 
   tags = each.value.tags
 
-}
-
-
-resource "azurerm_storage_container" "container" {
-  for_each              = local.containers
-  name                  = each.value.name
-  storage_account_name  = azurerm_storage_account.storage_account[each.value.storage_key].name
-  container_access_type = each.value.container_access_type
-  metadata              = each.value.metadata
-}
-
-
-resource "azurerm_storage_share" "storage_share" {
-  for_each             = local.storage_shares
-  name                 = each.value.name
-  storage_account_name = azurerm_storage_account.storage_account[each.value.storage_key].name
-  quota                = each.value.quota
 }

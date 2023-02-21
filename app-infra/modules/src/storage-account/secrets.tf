@@ -50,3 +50,10 @@ resource "azurerm_key_vault_secret" "sa_primary_file_endpoint" {
   value        = azurerm_storage_account.storage_account[each.key].primary_file_endpoint
   key_vault_id = local.app_key_vault_id
 }
+
+resource "azurerm_key_vault_secret" "storage_user_password" {
+  for_each     = local.local_users_with_password_enabled
+  name         = upper(replace(format("%s-%s-password", azurerm_storage_account.storage_account[each.value.storage_key].name, each.value.name), "_", "-"))
+  value        = azurerm_storage_account_local_user.storage_local_user[each.key].password
+  key_vault_id = local.app_key_vault_id
+}
