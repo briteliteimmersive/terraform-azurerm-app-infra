@@ -16,6 +16,7 @@ variable "storage_acc_configs" {
         shared_access_key_enabled         = bool
         min_tls_version                   = string
         is_hns_enabled                    = bool
+        sftp_enabled                      = bool
         large_file_share_enabled          = bool
         allow_nested_items_to_be_public   = bool
         infrastructure_encryption_enabled = bool
@@ -89,6 +90,27 @@ variable "storage_acc_configs" {
             }
           )
         )
+        local_users = list(object({
+          name           = string
+          home_directory = string
+          permission_scope = list(object({
+            permissions = object({
+              create = bool
+              delete = bool
+              list   = bool
+              read   = bool
+              write  = bool
+            })
+            resource_name = string
+            service       = string
+          }))
+          ssh_password_enabled = bool
+          ssh_key_enabled      = bool
+          ssh_authorized_key = list(object({
+            key         = string
+            description = string
+          }))
+        }))
         role_assignments = list(
           object(
             {

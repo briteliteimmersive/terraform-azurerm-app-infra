@@ -64,6 +64,7 @@ variable "storage_acc_configs" {
         cross_tenant_replication_enabled  = optional(bool)
         edge_zone                         = optional(string)
         is_hns_enabled                    = optional(bool, false)
+        sftp_enabled                      = optional(bool, false)
         large_file_share_enabled          = optional(bool)
         infrastructure_encryption_enabled = optional(bool, true)
         tags                              = optional(map(string), {})
@@ -96,7 +97,27 @@ variable "storage_acc_configs" {
             }
           )
         ), [])
-
+        local_users = optional(list(object({
+          name           = string
+          home_directory = optional(string)
+          permission_scope = list(object({
+            permissions = object({
+              create = optional(bool, false)
+              delete = optional(bool, false)
+              list   = optional(bool, false)
+              read   = optional(bool, false)
+              write  = optional(bool, false)
+            })
+            resource_name = string
+            service       = string
+          }))
+          ssh_password_enabled = optional(bool, true)
+          ssh_key_enabled      = optional(bool, false)
+          ssh_authorized_key = optional(list(object({
+            key         = string
+            description = optional(string)
+          })), [])
+        })), [])
       }
     ))
   })
@@ -189,6 +210,8 @@ locals {
         lower(try(storage.account_tier, "Standard")) == "standard" ||
         (lower(try(storage.account_tier, "Standard")) == "premium" && lower(try(storage.account_kind, "StorageV2")) == "blockblobstorage")
       ) ? storage.is_hns_enabled : false
+      ## This can only be enabled when is_hns_enabled is set to true.
+      sftp_enabled = storage.is_hns_enabled ? storage.sftp_enabled : false
       ## This cannot be true when account_replication_type = GRS/RAGRS/RAGZRS/GZRS
       large_file_share_enabled = contains(["GRS", "RAGRS", "RAGZRS", "GZRS"], try(storage.account_replication_type, "LRS")) ? null : try(storage.large_file_share_enabled, true)
       ## This can only be true when account_kind is StorageV2 or when account_tier is Premium and account_kind is BlockBlobStorage.
@@ -197,19 +220,9 @@ locals {
         (lower(try(storage.account_tier, "Standard")) == "premium" && lower(try(storage.account_kind, "StorageV2")) == "blockblobstorage")
       ) ? storage.infrastructure_encryption_enabled : false
       cross_tenant_replication_enabled = storage.cross_tenant_replication_enabled
-      containers = try(length(storage.containers), 0) > 0 ? [
-        for container in storage.containers : {
-          name                  = container.name
-          container_access_type = try(container.container_access_type, "private")
-          metadata              = try(container.metadata, {})
-        }
-      ] : []
-      file_shares = try(length(storage.file_shares), 0) > 0 ? [
-        for file_share in storage.file_shares : {
-          name  = file_share.name
-          quota = file_share.quota
-        }
-      ] : []
+      containers                       = storage.containers
+      file_shares                      = storage.file_shares
+      local_users                      = storage.local_users
     }
   }
 
