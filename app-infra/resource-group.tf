@@ -3,6 +3,7 @@ locals {
   resource_group_config = tolist(toset(concat(
     local.cdn_resource_groups,
     local.cosmosdb_resource_groups,
+    local.data_factory_resource_groups,
     local.keyvault_resource_groups,
     local.lb_resource_groups,
     local.linux_apps_resource_groups,
