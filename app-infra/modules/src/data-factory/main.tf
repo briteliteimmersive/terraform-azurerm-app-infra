@@ -66,6 +66,10 @@ resource "azurerm_data_factory" "data_factory" {
     }
   }
 
+  depends_on = [
+    azurerm_role_assignment.key_vault_role_assignment
+  ]
+
 }
 
 
