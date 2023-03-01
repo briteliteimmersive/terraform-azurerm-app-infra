@@ -1,6 +1,9 @@
 locals {
   data_factory_configs = {
-    for data_factory_config in var.data_factory_configs : data_factory_config.resource_key => data_factory_config
+    for data_factory_config in var.data_factory_configs : data_factory_config.resource_key => merge(data_factory_config, {
+      cmk_key               = lower(format("%s-cmk-key", data_factory_config.name))
+      cmk_user_identity_key = try(lower(format("%s/%s", data_factory_config.resource_key, data_factory_config.customer_managed_key_user_identity_name)), null)
+    })
   }
 }
 
@@ -12,8 +15,8 @@ resource "azurerm_data_factory" "data_factory" {
   resource_group_name              = each.value.resource_group_name
   managed_virtual_network_enabled  = each.value.managed_virtual_network_enabled
   public_network_enabled           = each.value.public_network_enabled
-  customer_managed_key_id          = each.value.customer_managed_key_id
-  customer_managed_key_identity_id = each.value.customer_managed_key_identity_id
+  customer_managed_key_id          = try(azurerm_key_vault_key.encryption_key[each.value.cmk_key].id, null)
+  customer_managed_key_identity_id = try(azurerm_user_assigned_identity.data_factory_identities[each.value.cmk_user_identity_key].id, null)
   tags                             = each.value.tags
 
   dynamic "github_configuration" {
@@ -43,9 +46,9 @@ resource "azurerm_data_factory" "data_factory" {
 
     content {
       type = identity.value.type
-      identity_ids = lower(identity.value.type) == "userassigned" ? flatten([
+      identity_ids = lower(identity.value.type) != "systemassigned" ? flatten([
         for identity in each.value.identity.user_identity_names : [
-          azurerm_user_assigned_identity.data_factory_identities["${each.key}_${identity}"].id
+          azurerm_user_assigned_identity.data_factory_identities[lower(format("%s/%s", each.key, identity))].id
         ]
       ]) : null
     }

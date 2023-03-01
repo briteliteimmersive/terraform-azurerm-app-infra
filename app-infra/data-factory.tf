@@ -68,7 +68,11 @@ variable "data_factory_configs" {
           type                = string
           user_identity_names = optional(list(string))
         }
-      ))
+        ), {
+        type                = "SystemAssigned" ## Defaulted to use a system assigned identity so linked services can use identity for access.
+        user_identity_names = []
+      })
+      customer_managed_key_user_identity_name = optional(string)
       vsts_configuration = optional(object({
         account_name    = string
         branch_name     = string
@@ -77,6 +81,22 @@ variable "data_factory_configs" {
         root_folder     = string
         tenant_id       = string
       }))
+      keyvault_linked_services = optional(list(object({
+        key_vault_name           = string
+        description              = optional(string)
+        integration_runtime_name = optional(string)
+        annotations              = optional(list(string), [])
+        parameters               = optional(map(string))
+        additional_properties    = optional(map(string))
+      })), [])
+      adls_gen2_linked_services = optional(list(object({
+        storage_account_name     = string
+        description              = optional(string)
+        integration_runtime_name = optional(string)
+        annotations              = optional(list(string), [])
+        parameters               = optional(map(string))
+        additional_properties    = optional(map(string))
+      })), [])
       tags = optional(map(string), {})
     }))
   })
@@ -117,16 +137,43 @@ locals {
         data_factory.tags,
         local.common_resource_tags
       )
-      role_assignments                 = local.data_factory_role_assignments
-      name                             = data_factory.name
-      managed_virtual_network_enabled  = data_factory.managed_virtual_network_enabled
-      public_network_enabled           = data_factory.public_network_enabled
-      identity                         = data_factory.identity
-      github_configuration             = data_factory.github_configuration
-      global_parameter                 = data_factory.global_parameter
-      vsts_configuration               = data_factory.vsts_configuration
-      customer_managed_key_id          = null
-      customer_managed_key_identity_id = null
+      role_assignments                = local.data_factory_role_assignments
+      name                            = data_factory.name
+      managed_virtual_network_enabled = data_factory.managed_virtual_network_enabled
+      public_network_enabled          = data_factory.public_network_enabled
+      identity                        = data_factory.identity
+      github_configuration            = data_factory.github_configuration
+      global_parameter                = data_factory.global_parameter
+      vsts_configuration              = data_factory.vsts_configuration
+      customer_managed_key_user_identity_name = lower(data_factory.identity.type) != "systemassigned" ? try(contains(
+        data_factory.identity.user_identity_names,
+        data_factory.customer_managed_key_user_identity_name
+      ), false) ? data_factory.customer_managed_key_user_identity_name : try(data_factory.identity.user_identity_names[0], null) : null
+      keyvault_linked_services = [
+        for kv_linked_service in data_factory.keyvault_linked_services : {
+          name                     = lower(format("%s_keyvault", kv_linked_service.key_vault_name))
+          key_vault_name           = kv_linked_service.key_vault_name
+          key_vault_id             = module.keyvault.outputs[local.keyvault_configs_map[kv_linked_service.key_vault_name].resource_key].id
+          description              = kv_linked_service.description
+          integration_runtime_name = kv_linked_service.integration_runtime_name
+          annotations              = kv_linked_service.annotations
+          parameters               = kv_linked_service.parameters
+          additional_properties    = kv_linked_service.additional_properties
+        }
+      ]
+      adls_gen2_linked_services = [
+        for adls_gen2_linked_service in data_factory.adls_gen2_linked_services : {
+          name                     = lower(format("%s_adls_gen2", adls_gen2_linked_service.storage_account_name))
+          storage_account_name     = adls_gen2_linked_service.storage_account_name
+          storage_account_id       = module.storage_accounts.outputs[local.storage_acc_configs_map[adls_gen2_linked_service.storage_account_name].resource_key].id
+          url                      = module.storage_accounts.outputs[local.storage_acc_configs_map[adls_gen2_linked_service.storage_account_name].resource_key].primary_dfs_endpoint
+          description              = adls_gen2_linked_service.description
+          integration_runtime_name = adls_gen2_linked_service.integration_runtime_name
+          annotations              = adls_gen2_linked_service.annotations
+          parameters               = adls_gen2_linked_service.parameters
+          additional_properties    = adls_gen2_linked_service.additional_properties
+        }
+      ]
     }
   }
 
@@ -137,6 +184,7 @@ module "data_factory" {
   source               = "./modules/src/data-factory"
   data_factory_configs = local.data_factory_configs
   app_key_vault_id     = local.infra_keyvault_id
+  admin_key_vault_id   = local.admin_key_vault_id
 }
 
 output "module" {

@@ -1,13 +1,12 @@
 variable "data_factory_configs" {
   type = list(object({
-    resource_key                     = string
-    name                             = string
-    location                         = string
-    resource_group_name              = string
-    managed_virtual_network_enabled  = bool
-    public_network_enabled           = bool
-    customer_managed_key_id          = string
-    customer_managed_key_identity_id = string
+    resource_key                            = string
+    name                                    = string
+    location                                = string
+    resource_group_name                     = string
+    managed_virtual_network_enabled         = bool
+    public_network_enabled                  = bool
+    customer_managed_key_user_identity_name = string
     github_configuration = object({
       account_name    = string
       branch_name     = string
@@ -34,24 +33,27 @@ variable "data_factory_configs" {
       root_folder     = string
       tenant_id       = string
     })
-    # #initialize azurerm_data_factory_integration_runtime_azure
-    # data_factory_integration_runtime = object({
-    #   name                    = string
-    #   description             = string
-    #   cleanup_enabled         = bool
-    #   compute_type            = string
-    #   core_count              = number
-    #   time_to_live_min        = number
-    #   virtual_network_enabled = bool
-    # })
-    # #initialize azurerm_data_factory_integration_runtime_self_hosted
-    # data_factory_integration_runtime_self_hosted = object({
-    #   name        = string
-    #   description = string
-    #   rbac_authorization = object({
-    #     resource_id = string
-    #   })
-    # })
+    keyvault_linked_services = list(object({
+      name                     = string
+      key_vault_name           = string
+      key_vault_id             = string
+      description              = string
+      integration_runtime_name = string
+      annotations              = list(string)
+      parameters               = map(string)
+      additional_properties    = map(string)
+    }))
+    adls_gen2_linked_services = list(object({
+      name                     = string
+      url                      = string
+      storage_account_name     = string
+      storage_account_id       = string
+      description              = string
+      integration_runtime_name = string
+      annotations              = list(string)
+      parameters               = map(string)
+      additional_properties    = map(string)
+    }))
     # diagnostic_settings = list(object(
     #   {
     #     name                         = string
@@ -99,4 +101,8 @@ variable "data_factory_configs" {
 variable "app_key_vault_id" {
   type    = string
   default = null
+}
+
+variable "admin_key_vault_id" {
+  type = string
 }
