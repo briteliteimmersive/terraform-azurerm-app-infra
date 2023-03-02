@@ -63,6 +63,7 @@ variable "storage_acc_configs" {
         access_tier                       = optional(string, "Hot")
         cross_tenant_replication_enabled  = optional(bool)
         edge_zone                         = optional(string)
+        allow_nested_items_to_be_public   = optional(bool, false)
         is_hns_enabled                    = optional(bool, false)
         sftp_enabled                      = optional(bool, false)
         large_file_share_enabled          = optional(bool)
@@ -158,7 +159,6 @@ locals {
       enable_https_traffic_only = true
       ## Needed by terraform
       shared_access_key_enabled       = true
-      allow_nested_items_to_be_public = false
       min_tls_version                 = "TLS1_2"
       tags = merge(
         local.storage_acc_tags,
@@ -199,6 +199,7 @@ locals {
       name             = storage.name
       account_kind     = storage.account_kind
       blob_properties  = storage.blob_properties
+      allow_nested_items_to_be_public = storage.allow_nested_items_to_be_public
       ## For BlockBlobStorage and FileStorage accounts only Premium is valid.
       account_tier             = contains(["blockblobstorage", "filestorage"], lower(try(storage.account_kind, "StorageV2"))) ? "Premium" : storage.account_tier
       account_replication_type = storage.account_replication_type
